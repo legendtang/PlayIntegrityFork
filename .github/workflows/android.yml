@@ -3,10 +3,10 @@ name: Android CI
 on:
   workflow_dispatch:
   push:
-    branches: main
+    branches: [main, maintenance/x86]
     paths-ignore: '**.md'
   pull_request:
-    branches: main
+    branches: [main, maintenance/x86]
     paths-ignore: '**.md'
 
 jobs:
@@ -33,16 +33,14 @@ jobs:
     - name: Build with Gradle
       run: ./gradlew --warning-mode all assembleRelease
 
-    - name: Label CI version when not a final release code
-      run: |
-        VERCODE=$(perl -n -e "print \$1 if /^versionCode=(.*)/" module/module.prop)
-        if [ "$(echo $VERCODE | grep -o '.$')" -eq 1 ]; then
-          perl -pi -e "s/^version=(.*)/version=\$1($VERCODE)-CI #${{ github.run_number }}/" module/module.prop
-        fi
+    - name: Verify module architectures and contents
+      run: >-
+        python3 tools/verify-module.py out/PlayIntegrityFork.zip
+        --abi armeabi-v7a --abi arm64-v8a --abi x86 --abi x86_64
 
-    - name: Upload CI module zip as artifact zip
+    - name: Upload verified module zip
       uses: actions/upload-artifact@v7
       with:
         name: PlayIntegrityFork-CI_#${{ github.run_number }}
-        path: 'module/*'
-        compression-level: 9
+        path: 'out/PlayIntegrityFork.zip'
+        compression-level: 0

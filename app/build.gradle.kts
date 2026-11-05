@@ -62,7 +62,9 @@ android {
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
+            // Arch/pacman supplies CMake outside the Android SDK. Permit an
+            // explicit matching version without changing upstream's default.
+            version = providers.gradleProperty("pif.cmakeVersion").orElse("3.22.1").get()
         }
     }
 }
@@ -94,7 +96,12 @@ tasks.register<Zip>("zip") {
     archiveFileName.set("PlayIntegrityFork.zip")
     destinationDirectory.set(project.rootDir.resolve("out"))
 
-    from(project.rootDir.resolve("module"))
+    from(project.rootDir.resolve("module")) {
+        exclude("custom.*", "keybox*", "pif.prop", "pif.json")
+    }
+    from(project.rootDir.resolve("LICENSE"))
+    from(project.rootDir.resolve("THIRD-PARTY-NOTICES.md"))
+    from(project.rootDir.resolve("licenses")) { into("licenses") }
 }
 
 afterEvaluate {

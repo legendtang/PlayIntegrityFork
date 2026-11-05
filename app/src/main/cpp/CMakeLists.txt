@@ -1,4 +1,7 @@
 cmake_minimum_required(VERSION 3.22.1)
+if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
+endif()
 
 project(playintegrityfix)
 
@@ -26,10 +29,7 @@ if(CMAKE_ANDROID_ARCH_ABI MATCHES "^(x86|x86_64)$")
             URL "https://github.com/frida/frida/releases/download/${PIF_GUM_VERSION}/frida-gum-devkit-${PIF_GUM_VERSION}-android-${CMAKE_ANDROID_ARCH_ABI}.tar.xz"
             URL_HASH "SHA256=${PIF_GUM_SHA256}"
         )
-        FetchContent_GetProperties(gum_devkit)
-        if(NOT gum_devkit_POPULATED)
-            FetchContent_Populate(gum_devkit)
-        endif()
+        FetchContent_MakeAvailable(gum_devkit)
         set(PIF_GUM_ROOT "${gum_devkit_SOURCE_DIR}")
     endif()
     if(NOT EXISTS "${PIF_GUM_ROOT}/frida-gum.h" OR NOT EXISTS "${PIF_GUM_ROOT}/libfrida-gum.a")
@@ -48,10 +48,7 @@ elseif(CMAKE_ANDROID_ARCH_ABI MATCHES "^(armeabi-v7a|arm64-v8a)$")
       GIT_TAG        v2.0.1
       PATCH_COMMAND perl -pi -e "s/sh_linker_init/sh_linker_init_dummy/g" shadowhook/src/main/cpp/sh_linker.c
     )
-    FetchContent_GetProperties(shadowhook)
-    if(NOT shadowhook_POPULATED)
-        FetchContent_Populate(shadowhook)
-    endif()
+    FetchContent_MakeAvailable(shadowhook)
     file(GLOB SHADOWHOOK_SRC
         ${shadowhook_SOURCE_DIR}/shadowhook/src/main/cpp/*.c
         ${shadowhook_SOURCE_DIR}/shadowhook/src/main/cpp/common/*.c

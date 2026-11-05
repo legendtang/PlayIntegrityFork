@@ -105,9 +105,9 @@ NDK `30.0.16248370`, CMake `3.22.1`, and the Gradle wrapper in this repository:
 ./gradlew --warning-mode all assembleRelease
 ```
 
-These are the inherited Gradle build requirements. The complete Gradle pipeline
-has not been validated locally. A separate, validated native/dex build avoids
-requiring AGP or an entire Android SDK installation:
+These are the inherited Gradle build requirements. The complete four-ABI Gradle
+release build has also passed locally with pacman-managed tools. A separate,
+validated native/dex build avoids requiring AGP or an entire Android SDK installation:
 
 ```sh
 python tools/build-native.py \
@@ -116,6 +116,32 @@ python tools/build-native.py \
   --r8 /path/to/r8.jar
 python tools/test-native.py --serial DEVICE_SERIAL
 ```
+
+On Arch Linux, use pacman-managed `android-ndk`, `android-platform`,
+`android-sdk-build-tools`, `jdk21-openjdk` and `gradle`. When using the system
+CMake, pass its installed version explicitly, for example:
+
+```sh
+JAVA_HOME=/usr/lib/jvm/java-21-openjdk ANDROID_HOME=/opt/android-sdk \
+  gradle -Ppif.cmakeVersion=4.4.5 assembleRelease
+```
+
+This selects the matching CMake executable on PATH instead of trying to download
+the upstream default into a root-owned SDK. It does not change the system Java
+default. The pacman NDK is at `/opt/android-ndk`.
+
+Validate the resulting Gradle module ZIP before distribution:
+
+```sh
+python tools/verify-module.py out/PlayIntegrityFork.zip \
+  --abi armeabi-v7a --abi arm64-v8a --abi x86 --abi x86_64
+```
+
+The verifier checks the exact ABI set, ELF class/type/machine, defined Zygisk
+module and companion entries, DEX header, license/provenance files and absence
+of device configuration or an upstream-only update URL. It inspects binaries
+without executing them. CI runs this validation before uploading the ZIP; it
+does not install anything on a device or request a Play Integrity verdict.
 
 The local validation used NDK 30.0.16248370, Android API 33 stubs, D8 8.6.27,
 and HiddenApiBypass 6.2. Gum devkits and the default HiddenApiBypass AAR are
