@@ -1,4 +1,7 @@
 MODPATH="${0%/*}"
+# Global early property changes can prevent Waydroid graphics from starting.
+# Its per-process hook is independent of these optional early adjustments.
+[ "$(getprop ro.board.platform)" = "waydroid" ] && exit 0
 . $MODPATH/common_func.sh
 
 if [ -d "$MODPATH/zygisk" ]; then

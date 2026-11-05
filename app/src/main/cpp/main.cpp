@@ -4,7 +4,8 @@
 
 #include "zygisk.hpp"
 #include "json/single_include/nlohmann/json.hpp"
-#include "shadowhook.h"
+#include "hook_backend.hpp"
+#include "property_callback.hpp"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF/Native", __VA_ARGS__)
 
@@ -31,73 +32,36 @@ static std::map<std::string, std::string> jsonProps;
 
 typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
 
-static std::map<void *, T_Callback> callbacks;
-
-static void modify_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
-    if (cookie == nullptr || name == nullptr || value == nullptr || !callbacks.contains(cookie)) return;
-
-    const char *oldValue = value;
-
-    std::string prop(name);
-
-    if (jsonProps.count(prop)) {
-        // Exact property match
-        value = jsonProps[prop].c_str();
-    } else {
-        // Leading * wildcard property match
-        for (const auto &p: jsonProps) {
-            if (p.first.starts_with("*") && prop.ends_with(p.first.substr(1))) {
-                value = p.second.c_str();
-                break;
-            }
-        }
-    }
-
-    if (oldValue == value) {
-        if (verboseLogs > 99) LOGD("[%s]: %s (unchanged)", name, oldValue);
-    } else {
-        LOGD("[%s]: %s -> %s", name, oldValue, value);
-    }
-
-    return callbacks[cookie](cookie, name, value, serial);
-}
-
 static void (*o_system_property_read_callback)(const prop_info *, T_Callback, void *);
 
 static void my_system_property_read_callback(const prop_info *pi, T_Callback callback, void *cookie) {
-    if (pi == nullptr || callback == nullptr || cookie == nullptr) {
+    if (pi == nullptr || callback == nullptr) {
         return o_system_property_read_callback(pi, callback, cookie);
     }
-    callbacks[cookie] = callback;
-    return o_system_property_read_callback(pi, modify_callback, cookie);
+    pif::PropertyReadContext context{callback, cookie, &jsonProps};
+    return o_system_property_read_callback(pi, pif::mapped_property_callback, &context);
 }
 
 #include <dlfcn.h>
 
-extern "C" int sh_linker_init(void) {
-    return 0;
-}
-
 static void doHook() {
-    shadowhook_init(SHADOWHOOK_MODE_UNIQUE, false);
-
     void *sym_addr = dlsym(RTLD_DEFAULT, "__system_property_read_callback");
     if (sym_addr == nullptr) {
         LOGD("Couldn't find '__system_property_read_callback' via dlsym");
         return;
     }
 
-    void *handle = shadowhook_hook_sym_addr(
+    bool installed = pif::install_hook(
             sym_addr,
             reinterpret_cast<void *>(my_system_property_read_callback),
             reinterpret_cast<void **>(&o_system_property_read_callback)
     );
 
-    if (handle == nullptr) {
-        LOGD("Couldn't hook '__system_property_read_callback'. Error: %d", shadowhook_get_errno());
+    if (!installed) {
+        LOGD("Couldn't hook '__system_property_read_callback' with %s", pif::hook_backend_name());
         return;
     }
-    LOGD("Found '__system_property_read_callback' handle at %p", handle);
+    LOGD("Property hook active: backend=%s target=%p", pif::hook_backend_name(), sym_addr);
 }
 
 static void setFieldNative(JNIEnv *env, jclass /* clazz_EntryPoint */, jclass targetClass, jobject fieldObj, jstring typeObj, jobject valueObj) {

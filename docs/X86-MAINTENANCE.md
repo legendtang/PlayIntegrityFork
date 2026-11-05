@@ -6,8 +6,30 @@ This fork tracks `osm0sis/PlayIntegrityFork`. Its initial maintenance branch is
 
 `main` remains an upstream synchronization branch. Work on the native x86 port
 belongs on the maintenance branch. Preserve upstream attribution and the existing
-GPL-3.0 license. This branch currently contains maintenance documentation only;
-it does not yet restore x86 support or provide a tested module ZIP.
+GPL-3.0 license. This branch implements an embedded Gum backend for x86/x86_64.
+Both native architectures have been built and tested on Waydroid; the x86_64
+module has also been installed and its hook verified in the actual GMS process.
+This does not mean the device passes Device or Strong integrity.
+
+## Current validation (2026-11-05)
+
+- x86 and x86_64 native tests: 24,003 callbacks each, zero failures, including
+  null/reused cookies, nested reads and eight concurrent threads.
+- GMS logs confirm `Property hook active: backend=gum`; selected Java Build
+  fields agree with the callback-based native property reads.
+- ARM64 ShadowHook backend cross-compiles; ARM runtime behavior has not been
+  tested on this x86 device.
+- One rate-limited service test after installation still returned Basic only.
+  Device/Strong remain unpassed and the exact server rejection reason is unknown.
+- A subsequent local probe found that the legacy `__system_property_get` API
+  still exposes different values from the intercepted callback API. Coverage of
+  additional read paths is under investigation; do not mistake selected-field
+  alignment for complete property API consistency.
+
+The native backend uses Gum's fast replacement API because the default
+replacement recursion guard skipped nested reads in the initial test. Each read
+uses a stack callback context instead of the upstream global callback registry.
+The backend and original-function trampoline remain loaded for process lifetime.
 
 ## Why a port is needed
 
@@ -77,9 +99,24 @@ NDK `30.0.16248370`, CMake `3.22.1`, and the Gradle wrapper in this repository:
 ./gradlew --warning-mode all assembleRelease
 ```
 
-These are source-declared requirements, not a claim that the fork has built
-successfully. At initialization no Android NDK was found in the local standard
-SDK locations. An SDK/NDK must be provisioned before native build validation.
+These are the inherited Gradle build requirements. The complete Gradle pipeline
+has not been validated locally. A separate, validated native/dex build avoids
+requiring AGP or an entire Android SDK installation:
+
+```sh
+python tools/build-native.py \
+  --ndk /path/to/android-ndk-r30 \
+  --android-jar /path/to/android-33/android.jar \
+  --r8 /path/to/r8.jar
+python tools/test-native.py --serial DEVICE_SERIAL
+```
+
+The local validation used NDK 30.0.16248370, Android API 33 stubs, D8 8.6.27,
+and HiddenApiBypass 6.2. Gum devkits and the default HiddenApiBypass AAR are
+checksum-pinned. The native test runner never requests an integrity token.
+The build defaults to x86 and x86_64; use repeated `--abi` options to select
+other architectures. Its ZIP is written to `out/PlayIntegrityFork-x86-maintenance.zip`
+with a build manifest and verified ELF architecture for every included library.
 
 Before distributing a maintenance build, give it clear fork provenance and
 review `module/module.prop` and update metadata: their inherited upstream update
