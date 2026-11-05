@@ -30,7 +30,15 @@ This does not mean the device passes Device or Strong integrity.
 - The installed `v19-x86.2` build was subsequently probed inside GMS: callback,
   get and read agree for the inspected model/device/fingerprint/type/release and
   patch properties. The global property storage is not rewritten by these hooks.
-  This build has not yet had a service-side retest; the cooldown remains in force.
+  Its single service-side retest at 18:20 Asia/Shanghai still returned Basic only;
+  Device and Strong did not pass. Fixing the legacy API coverage was insufficient
+  to change the service verdict. The request completed normally, the generated
+  public certificate chain verified locally, and a local signature from the
+  corresponding key verified with the leaf public key. These checks do not prove
+  Google accepted the emulated hardware identity or identify its rejection rule.
+- GitHub Actions run `42006433943` built all four ABIs and passed the package
+  verifier. The downloaded CI artifact was independently checked with the same
+  verifier. This is build evidence, not a passing Device/Strong verdict.
 
 The native backend uses Gum's fast replacement API because the default
 replacement recursion guard skipped nested reads in the initial test. Each read
