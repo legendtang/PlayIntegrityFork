@@ -22,7 +22,7 @@ def main():
         subprocess.run(adb + ['shell', 'chmod', '755', remote], check=True)
         result = subprocess.run(adb + ['shell', remote], capture_output=True, text=True, timeout=30)
         print(abi + ': ' + result.stdout.strip())
-        if result.returncode != 0 or 'callbacks=24003 failures=0 global_property_unchanged=true' not in result.stdout:
+        if result.returncode != 0 or 'callbacks=24003 failures=0 global_property_unchanged=true legacy_apis_consistent=true' not in result.stdout:
             raise RuntimeError('Native hook test failed: ' + result.stderr)
 
 

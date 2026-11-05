@@ -8,8 +8,10 @@ const char *hook_backend_name() { return "gum"; }
 bool install_hook(void *target, void *replacement, void **original) {
     if (!target || !replacement || !original) return false;
     // Called after specialization in a single target process, never in Zygote.
-    gum_init_embedded();
-    GumInterceptor *interceptor = gum_interceptor_obtain();
+    static GumInterceptor *interceptor = [] {
+        gum_init_embedded();
+        return gum_interceptor_obtain();
+    }();
     gum_interceptor_begin_transaction(interceptor);
     // Fast replacement avoids Gum's invocation recursion guard: a client's
     // property callback may synchronously read another mapped property.

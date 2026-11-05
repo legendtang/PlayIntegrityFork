@@ -58,7 +58,6 @@ def main():
         hidden = output/'hiddenapibypass-6.2.jar'
         with zipfile.ZipFile(aar) as archive:
             hidden.write_bytes(archive.read('classes.jar'))
-    classes = output/'classes'
     # Each invocation compiles into a fresh directory to exclude stale classes.
     with tempfile.TemporaryDirectory(dir=output, prefix='javac-') as temporary:
         sources = sorted((ROOT/'app/src/main/java').rglob('*.java'))
@@ -82,8 +81,19 @@ def main():
     # Staging is temporary so removed/unsupported ABIs cannot leak into a ZIP.
     with tempfile.TemporaryDirectory(dir=output, prefix='module-') as temporary:
         stage = Path(temporary)
-        shutil.copytree(ROOT/'module', stage, dirs_exist_ok=True,
-                        ignore=shutil.ignore_patterns('zygisk', 'classes.dex', 'custom.pif.*', 'pif.json'))
+        tracked = subprocess.check_output(['git', 'ls-files', '-z', 'module'], cwd=ROOT)
+        for entry in tracked.decode().split('\0'):
+            if not entry:
+                continue
+            source = ROOT/entry
+            relative = source.relative_to(ROOT/'module')
+            if relative.parts[0] == 'zygisk' or relative.name in ['classes.dex', 'pif.json', 'pif.prop']:
+                continue
+            if relative.name.startswith('custom.'):
+                continue
+            destination = stage/relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
         shutil.copy2(dex/'classes.dex', stage/'classes.dex')
         (stage/'zygisk').mkdir()
         for abi in abis:

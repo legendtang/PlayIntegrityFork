@@ -14,17 +14,23 @@ This does not mean the device passes Device or Strong integrity.
 ## Current validation (2026-11-05)
 
 - x86 and x86_64 native tests: 24,003 callbacks each, zero failures, including
-  null/reused cookies, nested reads and eight concurrent threads.
+  null/reused cookies, nested reads, eight concurrent threads, legacy get/read
+  consistency and bounds checking on the legacy output buffer.
 - GMS logs confirm `Property hook active: backend=gum`; selected Java Build
   fields agree with the callback-based native property reads.
 - ARM64 ShadowHook backend cross-compiles; ARM runtime behavior has not been
   tested on this x86 device.
 - One rate-limited service test after installation still returned Basic only.
   Device/Strong remain unpassed and the exact server rejection reason is unknown.
-- A subsequent local probe found that the legacy `__system_property_get` API
-  still exposes different values from the intercepted callback API. Coverage of
-  additional read paths is under investigation; do not mistake selected-field
-  alignment for complete property API consistency.
+- A subsequent local probe of the first build found that the legacy
+  `__system_property_get` API exposed different values from the intercepted
+  callback API. Version `v19-x86.2` extends coverage to get/read and adds tests
+  for both paths. That is a confirmed API coverage defect; whether it explains
+  the server's Device verdict is not established by the logs.
+- The installed `v19-x86.2` build was subsequently probed inside GMS: callback,
+  get and read agree for the inspected model/device/fingerprint/type/release and
+  patch properties. The global property storage is not rewritten by these hooks.
+  This build has not yet had a service-side retest; the cooldown remains in force.
 
 The native backend uses Gum's fast replacement API because the default
 replacement recursion guard skipped nested reads in the initial test. Each read

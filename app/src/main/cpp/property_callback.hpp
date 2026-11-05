@@ -13,6 +13,17 @@ struct PropertyReadContext {
     const PropertyMap *properties;
 };
 
+inline const std::string *property_override(const PropertyMap &properties, const char *name) {
+    if (!name) return nullptr;
+    auto exact = properties.find(name);
+    if (exact != properties.end()) return &exact->second;
+    const std::string property(name);
+    for (const auto &[pattern, replacement] : properties) {
+        if (pattern.starts_with("*") && property.ends_with(pattern.substr(1))) return &replacement;
+    }
+    return nullptr;
+}
+
 // Bionic invokes the callback synchronously. Each read owns a stack context,
 // supporting null/reused cookies, nested reads, and concurrent readers without
 // a global callback registry or a lock held across arbitrary client code.
@@ -23,19 +34,8 @@ inline void mapped_property_callback(void *opaque, const char *name,
         context.callback(context.cookie, name, value, serial);
         return;
     }
-    const auto &properties = *context.properties;
-    auto exact = properties.find(name);
-    if (exact != properties.end()) {
-        value = exact->second.c_str();
-    } else {
-        const std::string property(name);
-        for (const auto &[pattern, replacement] : properties) {
-            if (pattern.starts_with("*") && property.ends_with(pattern.substr(1))) {
-                value = replacement.c_str();
-                break;
-            }
-        }
-    }
+    if (const auto *replacement = property_override(*context.properties, name))
+        value = replacement->c_str();
     context.callback(context.cookie, name, value, serial);
 }
 }

@@ -78,7 +78,7 @@ else()
     message(FATAL_ERROR "Unsupported module ABI: ${CMAKE_ANDROID_ARCH_ABI}")
 endif()
 
-add_library(${CMAKE_PROJECT_NAME} SHARED main.cpp
+add_library(${CMAKE_PROJECT_NAME} SHARED main.cpp property_hooks.cpp
     local_cxa_atexit_finalize_impl/atexit.cpp ${PIF_HOOK_SRC})
 target_compile_features(${CMAKE_PROJECT_NAME} PRIVATE cxx_std_23)
 target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -fvisibility=hidden -ffunction-sections -fdata-sections)
@@ -86,7 +86,7 @@ target_link_options(${CMAKE_PROJECT_NAME} PRIVATE -Wl,--exclude-libs,ALL -Wl,--g
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${PIF_HOOK_LIBS})
 
 if(PIF_BUILD_NATIVE_TESTS)
-    add_executable(property_hook_test ../../../../tests/native/property_hook_test.cpp ${PIF_HOOK_SRC})
+    add_executable(property_hook_test ../../../../tests/native/property_hook_test.cpp property_hooks.cpp ${PIF_HOOK_SRC})
     target_compile_features(property_hook_test PRIVATE cxx_std_23)
     target_include_directories(property_hook_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(property_hook_test PRIVATE ${PIF_HOOK_LIBS})

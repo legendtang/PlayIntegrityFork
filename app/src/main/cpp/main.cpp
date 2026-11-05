@@ -6,6 +6,7 @@
 #include "json/single_include/nlohmann/json.hpp"
 #include "hook_backend.hpp"
 #include "property_callback.hpp"
+#include "property_hooks.hpp"
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "PIF/Native", __VA_ARGS__)
 
@@ -30,38 +31,12 @@ static int spoofVendingSdk = 0;
 
 static std::map<std::string, std::string> jsonProps;
 
-typedef void (*T_Callback)(void *, const char *, const char *, uint32_t);
-
-static void (*o_system_property_read_callback)(const prop_info *, T_Callback, void *);
-
-static void my_system_property_read_callback(const prop_info *pi, T_Callback callback, void *cookie) {
-    if (pi == nullptr || callback == nullptr) {
-        return o_system_property_read_callback(pi, callback, cookie);
-    }
-    pif::PropertyReadContext context{callback, cookie, &jsonProps};
-    return o_system_property_read_callback(pi, pif::mapped_property_callback, &context);
-}
-
-#include <dlfcn.h>
-
 static void doHook() {
-    void *sym_addr = dlsym(RTLD_DEFAULT, "__system_property_read_callback");
-    if (sym_addr == nullptr) {
-        LOGD("Couldn't find '__system_property_read_callback' via dlsym");
+    if (!pif::install_property_hooks(jsonProps)) {
+        LOGD("Property API hook coverage incomplete with %s", pif::hook_backend_name());
         return;
     }
-
-    bool installed = pif::install_hook(
-            sym_addr,
-            reinterpret_cast<void *>(my_system_property_read_callback),
-            reinterpret_cast<void **>(&o_system_property_read_callback)
-    );
-
-    if (!installed) {
-        LOGD("Couldn't hook '__system_property_read_callback' with %s", pif::hook_backend_name());
-        return;
-    }
-    LOGD("Property hook active: backend=%s target=%p", pif::hook_backend_name(), sym_addr);
+    LOGD("Property hooks active: backend=%s coverage=callback,get,read", pif::hook_backend_name());
 }
 
 static void setFieldNative(JNIEnv *env, jclass /* clazz_EntryPoint */, jclass targetClass, jobject fieldObj, jstring typeObj, jobject valueObj) {
