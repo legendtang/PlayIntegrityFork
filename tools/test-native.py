@@ -24,6 +24,10 @@ def main():
         print(abi + ': ' + result.stdout.strip())
         if result.returncode != 0 or 'callbacks=24003 failures=0 global_property_unchanged=true legacy_apis_consistent=true' not in result.stdout:
             raise RuntimeError('Native hook test failed: ' + result.stderr)
+        audit = subprocess.run(adb + ['shell', remote, '--audit-only'], capture_output=True, text=True, timeout=30)
+        print(abi + ': ' + audit.stdout.strip())
+        if audit.returncode != 0 or 'audit_only=true failures=0 property_values_unchanged=true audit_events=3' not in audit.stdout:
+            raise RuntimeError('Audit-only hook test failed: ' + audit.stderr)
 
 
 if __name__ == '__main__':

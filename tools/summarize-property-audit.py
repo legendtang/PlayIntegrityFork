@@ -9,7 +9,7 @@ import re
 LINE = re.compile(
     r'^\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+\s+(?P<pid>\d+)\s+\d+\s+[VDIWEF]\s+'
     r'PIF/PropertyAudit:\s+api=(?P<api>callback|get|read) key=(?P<key>\S+) '
-    r'mapped=(?P<mapped>[01]) caller=(?P<caller>\S+) offset=(?P<offset>0x[0-9a-fA-F]+) '
+    r'mapped=(?P<mapped>[01]) caller=(?P<caller>\S(?:[^\r\n]*?\S)?) offset=(?P<offset>0x[0-9a-fA-F]+) '
     r'resolved=(?P<resolved>[01])$'
 )
 

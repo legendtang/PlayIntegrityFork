@@ -33,6 +33,16 @@ Caller attribution identifies the immediate native call site, not the complete
 Java/native call chain. Unresolved/JIT code is explicitly marked unresolved and
 must not automatically be labelled as detector code.
 
+Version `v19-x86.6` adds `propertyAuditVending=1` (default off). Together with
+a nonzero `propertyAuditLimit`, this also traces the main Play Store process
+with an empty native property map: callback/get/read keep their original
+values. The existing Store Java fingerprint/SDK settings still apply.
+Actual request logs and process mappings showed DroidGuard code in the Store,
+so a GMS-only trace cannot establish what the request's Store process read.
+The audit-only path is checked separately in a fresh native test process.
+Instrumentation can affect the environment being measured; a trace is evidence
+of reads, not proof of why a server accepted or rejected a request.
+
 Analyze saved `logcat -v threadtime` output offline, optionally against a startup
 baseline, without making additional device/API requests:
 
@@ -49,8 +59,9 @@ Google accepted/rejected the device.
 Temporarily setting `spoofVendingSdk=32` was also checked locally. It changed
 the Play Store Java SDK to 32 and, by upstream design, stopped spoofing the
 Store fingerprint. The subsequent single service request returned
-`UNEVALUATED` across all reported categories, not a valid positive or negative
-Device decision. The original profile was restored. This mode is not treated as
+`UNEVALUATED` in app/account categories and an empty device verdict: Device
+did not pass, and the response did not identify the rejection reason.
+The original profile was restored. This mode is not treated as
 a working Device configuration or left enabled as a permanent Store setting.
 
 ## Current validation (2026-11-05)

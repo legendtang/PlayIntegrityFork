@@ -30,13 +30,30 @@ static void verify(void *cookie, const char *name, const char *value, uint32_t) 
     }
 }
 
-int main() {
+int main(int argc, char **argv) {
     model = __system_property_find("ro.product.model");
     device = __system_property_find("ro.product.device");
     reader = reinterpret_cast<Read>(dlsym(RTLD_DEFAULT, "__system_property_read_callback"));
     if (!model || !device || !reader) return 2;
     char before[PROP_VALUE_MAX];
     __system_property_get("ro.product.model", before);
+    if (argc == 2 && strcmp(argv[1], "--audit-only") == 0) {
+        // The Store diagnostic path installs the same hooks with no mappings.
+        // Compare all three APIs against the pre-hook result in a fresh process.
+        if (!pif::install_property_hooks(mappings, 32)) return 3;
+        Check unchanged_check{"ro.product.model", before, false};
+        reader(model, verify, &unchanged_check);
+        char value[PROP_VALUE_MAX], name[PROP_NAME_MAX];
+        auto legacy = reinterpret_cast<int (*)(const prop_info *, char *, char *)>(
+            dlsym(RTLD_DEFAULT, "__system_property_read"));
+        const int get_length = __system_property_get("ro.product.model", value);
+        if (strcmp(value, before) || get_length != strlen(before)) ++failures;
+        const int read_length = legacy(model, name, value);
+        if (strcmp(name, "ro.product.model") || strcmp(value, before) || read_length != strlen(before)) ++failures;
+        printf("audit_only=true failures=%u property_values_unchanged=%s audit_events=%u\n",
+               failures.load(), failures.load() == 0 ? "true" : "false", pif::property_audit_events());
+        return failures.load() == 0 && pif::property_audit_events() == 3 ? 0 : 4;
+    }
     mappings = {{"ro.product.model", "offline-exact"}, {"*.model", "wrong-precedence"},
                 {"*.device", "offline-wildcard"}, {"ro.product.name", std::string(200, 'x')}};
     if (!pif::install_property_hooks(mappings, 32)) return 3;

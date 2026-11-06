@@ -23,6 +23,7 @@
 
 static int verboseLogs = 0;
 static unsigned propertyAuditLimit = 0;
+static bool propertyAuditVending = false;
 static int spoofBuild = 1;
 static int spoofProps = 1;
 static int spoofProvider = 1;
@@ -199,7 +200,7 @@ public:
         if (pkgName == VENDING_PACKAGE) spoofBuild = spoofProps = spoofProvider = spoofSignature = 0;
         else spoofVendingFinger = spoofVendingSdk = 0;
 
-        if (spoofProps > 0) doHook();
+        if (spoofProps > 0 || (pkgName == VENDING_PACKAGE && propertyAuditVending && propertyAuditLimit > 0)) doHook();
         if (spoofBuild + spoofProvider + spoofSignature + spoofVendingFinger + spoofVendingSdk > 0) inject();
 
         dexVector.clear();
@@ -234,6 +235,11 @@ private:
                 }
             }
             json.erase("propertyAuditLimit");
+        }
+        if (json.contains("propertyAuditVending")) {
+            const auto &value = json["propertyAuditVending"];
+            propertyAuditVending = value.is_string() && value.get<std::string>() == "1";
+            json.erase("propertyAuditVending");
         }
 
         // Verbose logging level

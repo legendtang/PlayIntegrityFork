@@ -1,6 +1,6 @@
 id=playintegrityfix
 name=Play Integrity Fork (x86 maintenance)
-version=v19-x86.5
-versionCode=190005
+version=v19-x86.6
+versionCode=190006
 author=osm0sis & chiteroman @ xda-developers
 description=Maintained x86/x86_64 Gum backend; source: legendtang/PlayIntegrityFork

@@ -41,6 +41,13 @@ class PropertyAuditTests(unittest.TestCase):
         self.assertEqual(summarize(events)['unresolved_process_call_sites'], 1)
         self.assertFalse(summarize(events)['events'][0]['resolved'])
 
+    def test_deleted_memfd_module_name_keeps_spaces(self):
+        caller = 'memfd:frida-agent-64.so (deleted)'
+        events, malformed = parse(line(caller=caller))
+        self.assertEqual(malformed, 0)
+        self.assertEqual(events[0]['caller'], caller)
+        self.assertEqual(summarize(events)['by_immediate_caller'], {caller: 1})
+
 
 if __name__ == '__main__':
     unittest.main()
