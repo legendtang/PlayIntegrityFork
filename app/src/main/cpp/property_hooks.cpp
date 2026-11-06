@@ -19,7 +19,7 @@ LegacyRead original_read;
 std::atomic<unsigned> audit_remaining{0};
 std::atomic<unsigned> audit_emitted{0};
 thread_local bool inside_audit;
-struct AuditKey { const char *api; char name[129]; };
+struct AuditKey { const char *api; void *caller; char name[129]; };
 AuditKey audit_keys[1024];
 unsigned audit_key_count;
 std::mutex audit_mutex;
@@ -29,7 +29,7 @@ struct AuditGuard {
     ~AuditGuard() { inside_audit = false; }
 };
 
-void audit_read(const char *api, const char *name, bool mapped) {
+void audit_read(const char *api, const char *name, bool mapped, void *caller) {
     if (inside_audit || !name) return;
     if (audit_remaining.load(std::memory_order_relaxed) == 0) return;
     AuditGuard guard;
@@ -38,24 +38,38 @@ void audit_read(const char *api, const char *name, bool mapped) {
         unsigned remaining = audit_remaining.load(std::memory_order_relaxed);
         if (remaining == 0) return;
         for (unsigned index = 0; index < audit_key_count; ++index) {
-            if (strcmp(audit_keys[index].api, api) == 0 &&
+            if (audit_keys[index].caller == caller && strcmp(audit_keys[index].api, api) == 0 &&
                 strncmp(audit_keys[index].name, name, 128) == 0) return;
         }
         auto &key = audit_keys[audit_key_count++];
         key.api = api;
+        key.caller = caller;
         strncpy(key.name, name, 128);
         key.name[128] = '\0';
         audit_remaining.store(remaining - 1, std::memory_order_relaxed);
     }
     // Property values may contain device identifiers. Never log them here.
+    Dl_info info{};
+    const bool resolved = caller && dladdr(caller, &info) != 0 && info.dli_fname && info.dli_fbase;
+    const char *library = resolved ? strrchr(info.dli_fname, '/') : nullptr;
+    library = resolved ? (library ? library + 1 : info.dli_fname) : "unresolved";
+    const uintptr_t offset = resolved ? reinterpret_cast<uintptr_t>(caller) -
+        reinterpret_cast<uintptr_t>(info.dli_fbase) : 0;
     __android_log_print(ANDROID_LOG_DEBUG, "PIF/PropertyAudit",
-        "api=%s key=%.128s mapped=%u", api, name, mapped ? 1u : 0u);
+        "api=%s key=%.128s mapped=%u caller=%.128s offset=0x%zx resolved=%u",
+        api, name, mapped ? 1u : 0u, library, static_cast<size_t>(offset), resolved ? 1u : 0u);
     audit_emitted.fetch_add(1, std::memory_order_relaxed);
 }
 
+struct AuditedReadContext {
+    PropertyReadContext read;
+    void *caller;
+};
+
 void audited_callback(void *opaque, const char *name, const char *value, uint32_t serial) {
-    audit_read("callback", name, property_override(*mappings, name) != nullptr);
-    mapped_property_callback(opaque, name, value, serial);
+    auto &context = *static_cast<AuditedReadContext *>(opaque);
+    audit_read("callback", name, property_override(*mappings, name) != nullptr, context.caller);
+    mapped_property_callback(&context.read, name, value, serial);
 }
 
 int copy_legacy_value(const std::string &source, char *destination) {
@@ -69,14 +83,16 @@ int copy_legacy_value(const std::string &source, char *destination) {
 
 void callback_read(const prop_info *info, PropertyCallback callback, void *cookie) {
     if (!info || !callback) return original_callback(info, callback, cookie);
-    PropertyReadContext context{callback, cookie, mappings};
+    AuditedReadContext context{{callback, cookie, mappings},
+        __builtin_extract_return_addr(__builtin_return_address(0))};
     original_callback(info, audited_callback, &context);
 }
 
 int get(const char *name, char *value) {
     const int result = original_get(name, value);
     const auto *replacement = result > 0 ? property_override(*mappings, name) : nullptr;
-    audit_read("get", name, replacement != nullptr);
+    audit_read("get", name, replacement != nullptr,
+        __builtin_extract_return_addr(__builtin_return_address(0)));
     if (result <= 0 || !value) return result;
     if (replacement)
         return copy_legacy_value(*replacement, value);
@@ -86,14 +102,16 @@ int get(const char *name, char *value) {
 int legacy_read(const prop_info *info, char *name, char *value) {
     const int result = original_read(info, name, value);
     if (result <= 0 || !info || !value) return result;
-    const std::string *replacement = nullptr;
+    struct LegacyContext { const std::string *replacement; void *caller; } context{
+        nullptr, __builtin_extract_return_addr(__builtin_return_address(0))};
     // Legacy callers may omit the name output. Obtain it synchronously through
     // the original callback rather than assuming a populated name buffer.
     original_callback(info, [](void *opaque, const char *key, const char *, uint32_t) {
-        *static_cast<const std::string **>(opaque) = property_override(*mappings, key);
-        audit_read("read", key, *static_cast<const std::string **>(opaque) != nullptr);
-    }, &replacement);
-    return replacement ? copy_legacy_value(*replacement, value) : result;
+        auto &context = *static_cast<LegacyContext *>(opaque);
+        context.replacement = property_override(*mappings, key);
+        audit_read("read", key, context.replacement != nullptr, context.caller);
+    }, &context);
+    return context.replacement ? copy_legacy_value(*context.replacement, value) : result;
 }
 
 template<typename Function>

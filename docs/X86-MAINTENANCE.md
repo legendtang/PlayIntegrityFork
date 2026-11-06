@@ -15,10 +15,12 @@ requires `MEETS_DEVICE_INTEGRITY`; passing build/hook tests alone is insufficien
 
 ## Bounded property access diagnostics
 
-Version `v19-x86.4` adds optional `propertyAuditLimit=N` in the private PIF
+Version `v19-x86.5` adds optional `propertyAuditLimit=N` in the private PIF
 configuration. The default is zero (off); the hard maximum is 1024 log records
-per target process, deduplicated by API and property name. `PIF/PropertyAudit` records only `api`, `key` and whether a
-mapping matched. Property values are never included in these records. Ordinary
+per target process, deduplicated by API, property name and return address.
+`PIF/PropertyAudit` records `api`, `key`, whether a mapping matched, and the
+immediate caller's library basename/module-relative address when resolvable.
+Property values are never included in these records. Ordinary
 verbose Build-field logging is separate and need not be enabled.
 
 The budget and deduplication are synchronized across concurrent callers, and a thread-local guard avoids
@@ -27,6 +29,9 @@ stress test checks that exactly 32 audit records are emitted when configured
 with a budget of 32 after repeated and distinct-key reads, alongside callback and legacy API correctness. These
 diagnostics show which intercepted APIs were used; absence of a record does not
 prove no property was read through another API or directly from mapped storage.
+Caller attribution identifies the immediate native call site, not the complete
+Java/native call chain. Unresolved/JIT code is explicitly marked unresolved and
+must not automatically be labelled as detector code.
 
 Temporarily setting `spoofVendingSdk=32` was also checked locally. It changed
 the Play Store Java SDK to 32 and, by upstream design, stopped spoofing the
