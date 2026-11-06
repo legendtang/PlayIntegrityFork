@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cstring>
 #include <dlfcn.h>
+#include <mutex>
 #include <sys/system_properties.h>
 
 namespace pif {
@@ -18,19 +19,38 @@ LegacyRead original_read;
 std::atomic<unsigned> audit_remaining{0};
 std::atomic<unsigned> audit_emitted{0};
 thread_local bool inside_audit;
+struct AuditKey { const char *api; char name[129]; };
+AuditKey audit_keys[1024];
+unsigned audit_key_count;
+std::mutex audit_mutex;
+
+struct AuditGuard {
+    AuditGuard() { inside_audit = true; }
+    ~AuditGuard() { inside_audit = false; }
+};
 
 void audit_read(const char *api, const char *name, bool mapped) {
     if (inside_audit || !name) return;
-    unsigned remaining = audit_remaining.load(std::memory_order_relaxed);
-    while (remaining != 0 && !audit_remaining.compare_exchange_weak(
-               remaining, remaining - 1, std::memory_order_relaxed)) {}
-    if (remaining == 0) return;
-    inside_audit = true;
+    if (audit_remaining.load(std::memory_order_relaxed) == 0) return;
+    AuditGuard guard;
+    {
+        std::lock_guard lock(audit_mutex);
+        unsigned remaining = audit_remaining.load(std::memory_order_relaxed);
+        if (remaining == 0) return;
+        for (unsigned index = 0; index < audit_key_count; ++index) {
+            if (strcmp(audit_keys[index].api, api) == 0 &&
+                strncmp(audit_keys[index].name, name, 128) == 0) return;
+        }
+        auto &key = audit_keys[audit_key_count++];
+        key.api = api;
+        strncpy(key.name, name, 128);
+        key.name[128] = '\0';
+        audit_remaining.store(remaining - 1, std::memory_order_relaxed);
+    }
     // Property values may contain device identifiers. Never log them here.
     __android_log_print(ANDROID_LOG_DEBUG, "PIF/PropertyAudit",
         "api=%s key=%.128s mapped=%u", api, name, mapped ? 1u : 0u);
     audit_emitted.fetch_add(1, std::memory_order_relaxed);
-    inside_audit = false;
 }
 
 void audited_callback(void *opaque, const char *name, const char *value, uint32_t serial) {

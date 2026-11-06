@@ -87,7 +87,14 @@ int main() {
     char missing[PROP_VALUE_MAX];
     legacy_ok &= __system_property_get("pif.nonexistent.offline.test", missing) == 0 && missing[0] == '\0';
     if (!legacy_ok) ++failures;
-    if (pif::property_audit_events() != 32) ++failures;
+    const unsigned distinct_before = pif::property_audit_events();
+    // Repeated reads must not use the budget. New synthetic names exercise the
+    // cap without creating/changing any system property.
+    for (unsigned n = 0; n != 64; ++n) {
+        const std::string key = "pif.offline.audit." + std::to_string(n);
+        __system_property_get(key.c_str(), missing);
+    }
+    if (distinct_before >= 32 || pif::property_audit_events() != 32) ++failures;
     printf("backend=%s callbacks=%u failures=%u global_property_unchanged=%s legacy_apis_consistent=%s\n",
            pif::hook_backend_name(), calls.load(), failures.load(), unchanged ? "true" : "false",
            legacy_ok ? "true" : "false");
