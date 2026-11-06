@@ -33,6 +33,19 @@ Caller attribution identifies the immediate native call site, not the complete
 Java/native call chain. Unresolved/JIT code is explicitly marked unresolved and
 must not automatically be labelled as detector code.
 
+Analyze saved `logcat -v threadtime` output offline, optionally against a startup
+baseline, without making additional device/API requests:
+
+```sh
+python tools/summarize-property-audit.py request.log --baseline startup.log --output audit.json
+python -m unittest discover -s tests -p 'test_*.py'
+```
+
+The summary separates newly observed processes from newly observed native call
+sites, deduplicates repeated captures and reports malformed/incomplete records.
+It does not automatically classify a library as detector code or infer why
+Google accepted/rejected the device.
+
 Temporarily setting `spoofVendingSdk=32` was also checked locally. It changed
 the Play Store Java SDK to 32 and, by upstream design, stopped spoofing the
 Store fingerprint. The subsequent single service request returned

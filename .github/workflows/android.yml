@@ -30,6 +30,9 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
+    - name: Check offline property trace analysis
+      run: python3 -m unittest discover -s tests -p 'test_*.py'
+
     - name: Build with Gradle
       run: ./gradlew --warning-mode all assembleRelease
 
