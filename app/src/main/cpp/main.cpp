@@ -22,6 +22,7 @@
 #define DROIDGUARD_PACKAGE "com.google.android.gms.unstable"
 
 static int verboseLogs = 0;
+static unsigned propertyAuditLimit = 0;
 static int spoofBuild = 1;
 static int spoofProps = 1;
 static int spoofProvider = 1;
@@ -32,7 +33,7 @@ static int spoofVendingSdk = 0;
 static std::map<std::string, std::string> jsonProps;
 
 static void doHook() {
-    if (!pif::install_property_hooks(jsonProps)) {
+    if (!pif::install_property_hooks(jsonProps, propertyAuditLimit)) {
         LOGD("Property API hook coverage incomplete with %s", pif::hook_backend_name());
         return;
     }
@@ -219,6 +220,21 @@ private:
 
     void readJson() {
         LOGD("JSON contains %d keys!", static_cast<int>(json.size()));
+
+        if (json.contains("propertyAuditLimit")) {
+            const auto &value = json["propertyAuditLimit"];
+            if (value.is_string()) {
+                const auto setting = value.get<std::string>();
+                if (!setting.empty() && setting.size() <= 4 &&
+                    setting.find_first_not_of("0123456789") == std::string::npos) {
+                    propertyAuditLimit = std::min(1024u,
+                        static_cast<unsigned>(strtoul(setting.c_str(), nullptr, 10)));
+                } else {
+                    LOGD("Invalid propertyAuditLimit; audit disabled");
+                }
+            }
+            json.erase("propertyAuditLimit");
+        }
 
         // Verbose logging level
         if (json.contains("verboseLogs")) {

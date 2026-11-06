@@ -39,7 +39,7 @@ int main() {
     __system_property_get("ro.product.model", before);
     mappings = {{"ro.product.model", "offline-exact"}, {"*.model", "wrong-precedence"},
                 {"*.device", "offline-wildcard"}, {"ro.product.name", std::string(200, 'x')}};
-    if (!pif::install_property_hooks(mappings)) return 3;
+    if (!pif::install_property_hooks(mappings, 32)) return 3;
     reader(model, verify, nullptr);
     Check check{"ro.product.model", "offline-exact", true};
     reader(model, verify, &check);
@@ -87,9 +87,11 @@ int main() {
     char missing[PROP_VALUE_MAX];
     legacy_ok &= __system_property_get("pif.nonexistent.offline.test", missing) == 0 && missing[0] == '\0';
     if (!legacy_ok) ++failures;
+    if (pif::property_audit_events() != 32) ++failures;
     printf("backend=%s callbacks=%u failures=%u global_property_unchanged=%s legacy_apis_consistent=%s\n",
            pif::hook_backend_name(), calls.load(), failures.load(), unchanged ? "true" : "false",
            legacy_ok ? "true" : "false");
     fflush(stdout);
+    printf("property_audit_events=%u expected_limit=32\n", pif::property_audit_events());
     return failures.load() == 0 && calls.load() == 24003 ? 0 : 4;
 }

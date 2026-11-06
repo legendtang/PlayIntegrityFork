@@ -10,6 +10,30 @@ GPL-3.0 license. This branch implements an embedded Gum backend for x86/x86_64.
 Both native architectures have been built and tested on Waydroid; the x86_64
 module has also been installed and its hook verified in the actual GMS process.
 This does not mean the device passes Device or Strong integrity.
+The user's acceptance condition for the ongoing device investigation explicitly
+requires `MEETS_DEVICE_INTEGRITY`; passing build/hook tests alone is insufficient.
+
+## Bounded property access diagnostics
+
+Version `v19-x86.3` adds optional `propertyAuditLimit=N` in the private PIF
+configuration. The default is zero (off); the hard maximum is 1024 log records
+per target process. `PIF/PropertyAudit` records only `api`, `key` and whether a
+mapping matched. Property values are never included in these records. Ordinary
+verbose Build-field logging is separate and need not be enabled.
+
+The budget is atomic across concurrent callers, and a thread-local guard avoids
+logging recursively while Android's logger reads properties itself. The native
+stress test checks that exactly 32 audit records are emitted when configured
+with a budget of 32, alongside callback and legacy API correctness. These
+diagnostics show which intercepted APIs were used; absence of a record does not
+prove no property was read through another API or directly from mapped storage.
+
+Temporarily setting `spoofVendingSdk=32` was also checked locally. It changed
+the Play Store Java SDK to 32 and, by upstream design, stopped spoofing the
+Store fingerprint. The subsequent single service request returned
+`UNEVALUATED` across all reported categories, not a valid positive or negative
+Device decision. The original profile was restored. This mode is not treated as
+a working Device configuration or left enabled as a permanent Store setting.
 
 ## Current validation (2026-11-05)
 
